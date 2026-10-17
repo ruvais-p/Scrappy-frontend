@@ -13,6 +13,7 @@ type Receipt = {
 };
 type Reconciliation = {
   lead: string; version: number; can_edit: boolean; unavailable_reason: string;
+  reweigh_required?: boolean; previous_lines?: Measurement[];
   lines: {product: string; name: string; billed: string; unit: string}[];
   materials: {id: string; name: string}[]; receipt: Receipt | null;
 };
@@ -91,22 +92,24 @@ export default function ReceiptEditor({leadId, close, blockClose}: {leadId: stri
 
   if (query.isError && !baseline) return <div role="alert" className="notice error">{query.error.message}<button className="secondary" onClick={() => query.refetch()}>Retry</button></div>;
   if (!baseline) return <p role="status">Loading reconciliation…</p>;
-  return <form onSubmit={event => {event.preventDefault(); void save('receive');}}>
+  return <form className="receipt-editor" onSubmit={event => {event.preventDefault(); void save('receive');}}>
     {error && <div role="alert" className="notice error">{error}</div>}
     {message && <div role="status" className="notice">{message}</div>}
-    {!baseline.can_edit && <div className="notice">{baseline.unavailable_reason || 'This reconciliation is read-only for your role.'}</div>}
+    {!baseline.can_edit && <div className="notice receipt-blocked" role="status"><strong>Measurements are locked</strong><span>{baseline.unavailable_reason || 'This reconciliation is read-only for your role.'}</span>{baseline.unavailable_reason.includes('unloading')&&<span>Go to Loads and weighing, open this route, record its unloading evidence, then refresh this dialog.</span>}</div>}
+    {baseline.reweigh_required&&<div className="notice" role="status"><strong>HQ requested a reweigh.</strong><span>Enter the new physical measurements. The previous submitted weights remain in the audit history and stock will be adjusted by the measured difference.</span></div>}
     <button type="button" className="text-button" disabled={busy || uncertain} onClick={() => query.refetch()}>Check for updates</button>
     {stale && !uncertain && <div role="alert" className="notice">This record changed while you were editing. Your input has been preserved.<button type="button" className="secondary" onClick={() => restore(query.data!)}>Reload saved measurements (discards edits)</button></div>}
-    <div className="table-scroll"><table>
-      <thead><tr><th>Material</th><th>Billed kg</th><th>Measured kg</th><th>Difference kg</th><th>Difference %</th><th>Check</th></tr></thead>
+    <div className="table-scroll receipt-measurements"><table className="receipt-measurement-table"><colgroup><col className="material-col"/><col className="billed-col"/><col className="measured-col"/><col className="difference-col"/><col className="percent-col"/><col className="check-col"/></colgroup>
+      <thead><tr><th>Material</th><th>Billed kg</th>{baseline.reweigh_required&&<th>Previous kg</th>}<th>Measured kg</th><th>Difference kg</th><th>Difference %</th><th>Check</th></tr></thead>
       <tbody>{entries.map((line, index) => {
         const result = preview?.lines.find(item => item.product === line.product);
         return <tr key={line.product}>
-          <td>{line.name}{line.extra && <small>Unbilled material</small>}</td><td>{line.billed}</td>
-          <td><input aria-label={`Measured ${line.name} kg`} type="number" min="0" step="0.001" value={line.actual} disabled={disabled}
+          <td data-label="Material">{line.name}{line.extra && <small>Unbilled material</small>}</td><td data-label="Billed kg">{line.billed}</td>
+          {baseline.reweigh_required&&<td data-label="Previous kg">{baseline.previous_lines?.find(item=>item.product===line.product)?.actual??'—'}</td>}
+          <td data-label="Measured kg"><input aria-label={`Measured ${line.name} kg`} type="number" min="0" step="0.001" value={line.actual} disabled={disabled}
             onChange={event => {setEntries(entries.map((item, i) => i === index ? {...item, actual: event.target.value} : item)); edited();}}/></td>
-          <td>{result?.difference ?? '—'}</td><td>{result ? result.percent === null ? 'N/A' : Number(result.percent).toFixed(2) + '%' : '—'}</td>
-          <td>{result ? <span className={'badge ' + (result.flagged ? 'warning' : 'success')}>{result.check}</span> : line.actual === '' ? 'Enter weight' : 'Review required'}
+          <td data-label="Difference kg">{result?.difference ?? '—'}</td><td data-label="Difference %">{result ? result.percent === null ? 'N/A' : Number(result.percent).toFixed(2) + '%' : '—'}</td>
+          <td data-label="Check">{result ? <span className={'badge ' + (result.flagged ? 'warning' : 'success')}>{result.check}</span> : line.actual === '' ? 'Enter weight' : 'Review required'}
             {line.extra && <button type="button" className="text-button" disabled={disabled} onClick={() => {setEntries(entries.filter(item => item.product !== line.product)); edited();}}>Remove {line.name}</button>}</td>
         </tr>;
       })}</tbody>
@@ -120,7 +123,7 @@ export default function ReceiptEditor({leadId, close, blockClose}: {leadId: stri
     }}>Add unbilled material</button></div>
     <label>Warehouse note<textarea maxLength={1000} disabled={disabled} value={note} onChange={event => {setNote(event.target.value); setMessage('');}}/></label>
     {preview && <div className="notice"><strong>{preview.complete && entries.every(line => line.actual !== '') ? 'Reviewed totals' : 'Provisional totals — measurements are incomplete'}</strong><p>Billed: {preview.billed_total} kg · Measured: {preview.actual_total} kg</p></div>}
-    <p className="muted">Review uses server-calculated differences and the exact ±2% tolerance. Explicit zero records a shortage. Submission receives actual stock, including flagged measurements, and preserves the customer bill.</p>
+    <p className="muted">Review uses server-calculated differences and the exact ±2% tolerance. Explicit zero records a shortage. Submission receives actual stock, including flagged measurements, and preserves the customer bill.{baseline.reweigh_required?' A downward adjustment is blocked if it would make available stock negative.':''}</p>
     <div className="dialog-actions">
       <button type="button" className="secondary" onClick={close} disabled={busy || uncertain}>Close</button>
       {uncertain ? <button type="button" disabled={busy} onClick={() => save(attempt.current!.action as 'save-reconciliation' | 'receive')}>{busy ? 'Recovering…' : 'Recover save result'}</button> : <>

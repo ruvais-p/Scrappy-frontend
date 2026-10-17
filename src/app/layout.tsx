@@ -4,5 +4,6 @@ import '@fontsource/poppins/500.css';
 import '@fontsource/poppins/600.css';
 import '@fontsource/poppins/700.css';
 import './globals.css';
+import './workspace.css';
 export const metadata:Metadata={title:'Scrappy · Operations',description:'Franchise billing and collection operations'};
 export default function Layout({children}:{children:React.ReactNode}){return <html lang="en"><body>{children}</body></html>}

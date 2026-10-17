@@ -9,9 +9,9 @@ export async function signIn(page: import('@playwright/test').Page, role:string)
   await page.getByRole('button',{name:'Sign in',exact:true}).click();
   // Avoid persisting credentials in failure accessibility snapshots.
   await page.locator('input[type="password"]').evaluateAll(inputs=>inputs.forEach(input=>{(input as HTMLInputElement).value='';}));
-  await expect(page.getByRole('heading',{name:/Hello,/})).toBeVisible();
+  await expect(page.locator('main#workspace h1')).toHaveText(['admin','super_admin'].includes(role)?'Dashboard':new RegExp('Hello,'));
   await expect(page.locator('.connection')).toHaveText('Live');
   await expect(page.locator('body')).toHaveCSS('font-family',/Poppins/);
-  await expect(page.getByText('Your daily workspace',{exact:true})).toBeVisible();
+  await expect(page.locator('nav').getByRole('button',{name:role==='collector'?'Home':'Dashboard',exact:true})).toHaveCount(1);
   await page.screenshot({path:`test-results/${role}-workspace.png`,fullPage:true});
 }
