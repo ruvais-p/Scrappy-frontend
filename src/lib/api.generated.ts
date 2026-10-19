@@ -456,6 +456,8 @@ export interface components {
             /** Format: uuid */
             franchise: string;
             amount: string | null;
+            discount_percent: string | null;
+            final_price: string | null;
             override: boolean;
             eligible: boolean;
         };
@@ -472,6 +474,10 @@ export interface components {
             category_name: string;
             unit: string;
             default: string | null;
+            tax_percent: string;
+            hsn: string;
+            default_final_price: string | null;
+            default_discount_percent: string | null;
             cells: components["schemas"]["PricingCell"][];
         };
         PricingResponse: {

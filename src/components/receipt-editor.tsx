@@ -21,6 +21,24 @@ type Preview = {lines: Measurement[]; complete: boolean; actual_total: string; b
 type Entry = {product: string; name: string; billed: string; actual: string; extra: boolean};
 type Attempt = {action: string; body: unknown; key: string};
 
+function liveMeasurement(line: Entry) {
+  if (line.actual.trim() === '' || !/^\d+(\.\d*)?$/.test(line.actual.trim())) return null;
+  const billed = Number(line.billed), actual = Number(line.actual);
+  if (!Number.isFinite(billed) || !Number.isFinite(actual) || billed < 0 || actual < 0) return null;
+  const difference = actual - billed;
+  const billedMilli = Math.round(billed * 1000), differenceMilli = Math.round(difference * 1000);
+  const flagged = billed === 0 ? actual > 0 : Math.abs(differenceMilli) * 100 > billedMilli * 2;
+  const check = billed === 0 ? actual > 0 ? 'Unbilled excess' : 'Not billed / no receipt'
+    : flagged && difference < 0 ? 'Short' : flagged ? 'Excess' : difference === 0 ? 'Matched' : 'Within tolerance';
+  return {difference, percent: billed === 0 ? null : difference / billed * 100, flagged, check};
+}
+
+function formatWeight(value: number) {
+  const rounded = Math.round(value * 1000) / 1000;
+  const formatted = rounded.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+  return (rounded > 0 ? '+' : '') + formatted;
+}
+
 export default function ReceiptEditor({leadId, close, blockClose}: {leadId: string; close: () => void; blockClose: (blocked: boolean) => void}) {
   const qc = useQueryClient();
   const query = useQuery({queryKey: ['reconciliation', leadId], queryFn: () => api<Reconciliation>(`reconciliation/${leadId}/`)});
@@ -102,14 +120,14 @@ export default function ReceiptEditor({leadId, close, blockClose}: {leadId: stri
     <div className="table-scroll receipt-measurements"><table className="receipt-measurement-table"><colgroup><col className="material-col"/><col className="billed-col"/><col className="measured-col"/><col className="difference-col"/><col className="percent-col"/><col className="check-col"/></colgroup>
       <thead><tr><th>Material</th><th>Billed kg</th>{baseline.reweigh_required&&<th>Previous kg</th>}<th>Measured kg</th><th>Difference kg</th><th>Difference %</th><th>Check</th></tr></thead>
       <tbody>{entries.map((line, index) => {
-        const result = preview?.lines.find(item => item.product === line.product);
-        return <tr key={line.product}>
+        const result = liveMeasurement(line);
+        return <tr key={line.product} className={result&&result.difference!==0?'receipt-measurement-mismatch':undefined}>
           <td data-label="Material">{line.name}{line.extra && <small>Unbilled material</small>}</td><td data-label="Billed kg">{line.billed}</td>
           {baseline.reweigh_required&&<td data-label="Previous kg">{baseline.previous_lines?.find(item=>item.product===line.product)?.actual??'—'}</td>}
           <td data-label="Measured kg"><input aria-label={`Measured ${line.name} kg`} type="number" min="0" step="0.001" value={line.actual} disabled={disabled}
             onChange={event => {setEntries(entries.map((item, i) => i === index ? {...item, actual: event.target.value} : item)); edited();}}/></td>
-          <td data-label="Difference kg">{result?.difference ?? '—'}</td><td data-label="Difference %">{result ? result.percent === null ? 'N/A' : Number(result.percent).toFixed(2) + '%' : '—'}</td>
-          <td data-label="Check">{result ? <span className={'badge ' + (result.flagged ? 'warning' : 'success')}>{result.check}</span> : line.actual === '' ? 'Enter weight' : 'Review required'}
+          <td data-label="Difference kg" aria-live="polite">{result ? formatWeight(result.difference) : '—'}</td><td data-label="Difference %" aria-live="polite">{result ? result.percent === null ? 'N/A' : (result.percent > 0 ? '+' : '') + result.percent.toFixed(2) + '%' : '—'}</td>
+          <td data-label="Check" aria-live="polite">{result ? <span className={'badge ' + (result.flagged ? 'warning' : 'success')}>{result.check}</span> : line.actual === '' ? 'Enter weight' : 'Enter a valid weight'}
             {line.extra && <button type="button" className="text-button" disabled={disabled} onClick={() => {setEntries(entries.filter(item => item.product !== line.product)); edited();}}>Remove {line.name}</button>}</td>
         </tr>;
       })}</tbody>
@@ -123,7 +141,7 @@ export default function ReceiptEditor({leadId, close, blockClose}: {leadId: stri
     }}>Add unbilled material</button></div>
     <label>Warehouse note<textarea maxLength={1000} disabled={disabled} value={note} onChange={event => {setNote(event.target.value); setMessage('');}}/></label>
     {preview && <div className="notice"><strong>{preview.complete && entries.every(line => line.actual !== '') ? 'Reviewed totals' : 'Provisional totals — measurements are incomplete'}</strong><p>Billed: {preview.billed_total} kg · Measured: {preview.actual_total} kg</p></div>}
-    <p className="muted">Review uses server-calculated differences and the exact ±2% tolerance. Explicit zero records a shortage. Submission receives actual stock, including flagged measurements, and preserves the customer bill.{baseline.reweigh_required?' A downward adjustment is blocked if it would make available stock negative.':''}</p>
+    <p className="muted">Difference, percentage, and tolerance check update as you type. Review verifies them using the server’s exact ±2% rule. Enter zero to record a shortage. Submission receives the measured stock, including flagged measurements, and preserves the customer bill.{baseline.reweigh_required?' A downward adjustment is blocked if it would make available stock negative.':''}</p>
     <div className="dialog-actions">
       <button type="button" className="secondary" onClick={close} disabled={busy || uncertain}>Close</button>
       {uncertain ? <button type="button" disabled={busy} onClick={() => save(attempt.current!.action as 'save-reconciliation' | 'receive')}>{busy ? 'Recovering…' : 'Recover save result'}</button> : <>
