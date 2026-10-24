@@ -16,6 +16,7 @@ export default function TransactionPage({user,navigate}:{user:Identity;navigate:
  return <Editor key={id||'new'} user={user} navigate={navigate} initial={q.data||null}/>;
 }
 function Editor({user,navigate,initial}:{user:Identity;navigate:Navigate;initial:Row|null}){
+ const kwdLead=new URLSearchParams(typeof window!=='undefined'?location.search:'').get('lead');
  const defaultMode=user.role==='digester_franchise_admin'?'sales':'purchase';
  const qc=useQueryClient(),o=useOptions(user);const [saved,setSaved]=useState(initial),[book,setBook]=useState(String(initial?.franchise||user.franchise||'')),[mode,setMode]=useState(String(initial?.mode||defaultMode)),[transactionType,setTransactionType]=useState(String(initial?.transaction_type||'B2C')),[customer,setCustomer]=useState(String(initial?.customer||'')),[search,setSearch]=useState(''),[lines,setLines]=useState<Line[]>((initial?.lines as Line[]|undefined)?.map(l=>({product:l.product,quantity:String(l.quantity)}))||[{product:'',quantity:''}]);
  const [amount,setAmount]=useState(''),[method,setMethod]=useState('Cash'),[reference,setReference]=useState(''),[error,setError]=useState<unknown>(),[busy,setBusy]=useState(false),[uncertain,setUncertain]=useState(false),[notice,setNotice]=useState(''),[newCustomer,setNewCustomer]=useState(false);
@@ -38,7 +39,7 @@ function Editor({user,navigate,initial}:{user:Identity;navigate:Navigate;initial
  const companyBillingBlocked=billingMode==='company'&&!user.capabilities.includes('company.billing');
  const name=selectedBook?.name;const blocked=busy||uncertain;
  async function execute(op:Operation){setBusy(true);setError(null);operation.current=op;try{const result=await api<Row>(op.path,op.data,op.key);if(op.kind==='pay'){const refreshed=await api<Row>(`bills/${saved!.id}/`);setSaved(refreshed);setNotice('Payment recorded.');setAmount('')}else {setSaved(result);setCompanyMode(result.billing_mode==='company');setLines((result.lines as Line[]).map(l=>({product:l.product,quantity:String(l.quantity)})));setNotice(op.kind==='issue'?'Invoice issued. Record payment below.':'Draft saved. Review the total before issuing.')}setUncertain(false);operation.current=null;void qc.invalidateQueries()}catch(e){setError(e);setUncertain(!(e instanceof ApiError)||e.status>=500)}finally{setBusy(false)}}
- function save(){void execute({path:saved?`bills/${saved.id}/save/`:'bills/',data:{franchise:book,customer,kind,mode,transaction_type:transactionType,lines,billing_mode:companyMode?'company':undefined,version:saved?.version},key:crypto.randomUUID(),kind:'save'})}
+ function save(){void execute({path:saved?`bills/${saved.id}/save/`:'bills/',data:{franchise:book,customer,kind,mode,transaction_type:transactionType,lines,billing_mode:companyMode?'company':undefined,kwd_lead:kwdLead||undefined,version:saved?.version},key:crypto.randomUUID(),kind:'save'})}
  function issue(){if(!saved||dirty)return;void execute({path:`bills/${saved.id}/issue/`,data:{version:saved.version},key:crypto.randomUUID(),kind:'issue'})}
  function pay(){if(!saved)return;void execute({path:`bills/${saved.id}/pay/`,data:{amount,method,reference,version:saved.version},key:crypto.randomUUID(),kind:'pay'})}
  const total=saved?.total;const outstanding=Number(saved?.outstanding??(Number(saved?.total||0)-Number(saved?.settled||0)));

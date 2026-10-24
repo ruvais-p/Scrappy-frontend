@@ -13,6 +13,7 @@ import {BillingDashboard,Payments,Earnings,Team,Catalogue,Pricing} from './works
 import QuotationWorkspace from './workspace/quotations';
 import TransactionPage from './workspace/transaction';
 import DigesterWorkspace from './workspace/digester';
+import KWDFranchiseWorkspace from './workspace/kwd-franchise';
 import {Tabs} from './workspace/ui';
 const queryClient=new QueryClient({defaultOptions:{queries:{retry:1,refetchOnWindowFocus:true,staleTime:10000}}});
 export default function Workspace(){return <QueryClientProvider client={queryClient}><Application/></QueryClientProvider>}
@@ -64,6 +65,8 @@ function Application(){
  const enhanced=['bills','invoices','customers','franchises'];
  return <WorkspaceShell user={user} screen={screen} navigate={navigate} connection={connection} logoutError={logoutError} logoutBusy={loggingOut} logout={()=>void logout()}><div key={routeKey||screen}>
  {!permitted.includes(screen)?<div className="empty"><ShieldCheck/><h2>Access unavailable</h2><button onClick={()=>navigate('dashboard')}>Go to overview</button></div>:
+ user.role==='digester_franchise_admin'&&screen==='kwd_new_sale'?<TransactionPage user={user} navigate={navigate}/>:
+ user.role==='digester_franchise_admin'?<KWDFranchiseWorkspace user={user} screen={screen} navigate={navigate}/>:
  ['digester_hq_manager','zonal_manager','tso'].includes(user.role)?<DigesterWorkspace user={user} screen={screen} navigate={navigate}/>:
  screen==='new-transaction'?<TransactionPage user={user} navigate={navigate}/>:
  screen==='quotations'?<QuotationWorkspace user={user} navigate={navigate}/>:
