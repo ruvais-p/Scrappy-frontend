@@ -1,4 +1,4 @@
-export type Identity = { id:number; name:string; email:string; role:string; role_label:string; access_role?:string; custom_role?:string|null; franchise:string|null; franchise_name:string; warehouse:string|null; permission_version:number; capabilities:string[] };
+export type Identity = { id:number; name:string; email:string; role:string; role_label:string; access_role?:string; custom_role?:string|null; franchise:string|null; franchise_name:string; manager?:string|null; manager_name?:string|null; warehouse:string|null; permission_version:number; capabilities:string[] };
 export type AuthLoginInput = { email:string; password:string };
 export type ResetRequestInput = { email:string };
 export type PasswordConfirmationInput = { token:string; password:string };
